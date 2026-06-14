@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pier - Connect with Pier</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f0ede9;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:20px;}
+#root{width:100%;max-width:1300px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback} = React;
+const SK="pier_cwp", PK="pier_pin_cwp";
+
+const DEFAULTS={
+  clients:[
+    {id:"aw",name:"American Wellness",niche:"Doctor's Office",role:"Phone Receptionist",emoji:"🏥",color:"#2d7a5f",tasks:[
+      {id:"t1",text:"Review call log from yesterday",status:"pending"},
+      {id:"t2",text:"Update patient callback scripts",status:"inprogress"}
+    ]},
+    {id:"po",name:"Paw Origins",niche:"CBD Pet Products",role:"CS Manager & EA",emoji:"🐾",color:"#b85c1a",tasks:[
+      {id:"t3",text:"Draft weekly status report",status:"pending"},
+      {id:"t4",text:"Answer product FAQ tickets",status:"inprogress"}
+    ]},
+    {id:"mt",name:"MT Global",niche:"Fashion Ecommerce",role:"CS Manager (4 VAs)",emoji:"👗",color:"#2d5fa8",tasks:[
+      {id:"t5",text:"Review VA performance this week",status:"pending"},
+      {id:"t6",text:"Check KPI dashboard metrics",status:"completed"},
+      {id:"t7",text:"Send Dinili escalation report",status:"inprogress"}
+    ]},
+    {id:"sj",name:"Surfers Jewelry",niche:"Jewelry",role:"CS Manager",emoji:"💎",color:"#7a4fb5",tasks:[
+      {id:"t8",text:"Confirm inventory dashboard is live",status:"inprogress"},
+      {id:"t9",text:"Check Ecommerce stock levels",status:"pending"}
+    ]},
+    {id:"ve",name:"Verinelle",niche:"Fashion Ecommerce",role:"CS Manager (Onboarding)",emoji:"✨",color:"#c9a84c",tasks:[
+      {id:"t10",text:"Complete onboarding checklist",status:"inprogress"},
+      {id:"t11",text:"Set up ticket workflow SOP",status:"pending"},
+      {id:"t12",text:"Define KPI baselines",status:"pending"}
+    ]}
+  ],
+  events:[],
+  docs:[
+    {id:"d1",title:"MT Global KPI Dashboard",client:"mt",icon:"📊",desc:"Live analytics for Dinili & Montanello.",url:"",date:"2025-06-01"},
+    {id:"d2",title:"Surfers Jewelry Inventory",client:"sj",icon:"📊",desc:"GitHub Pages inventory dashboard.",url:"https://connectwithpier.github.io/Surfers-Jewelry-Inventory-Levels/",date:"2025-06-01"},
+    {id:"d3",title:"VA Escalation Policy",client:"mt",icon:"📋",desc:"SOP for escalating tickets beyond VA level.",url:"",date:"2025-05-15"}
+  ],
+  links:[
+    {id:"l1",title:"MT Global Dashboard",url:"#",client:"mt",emoji:"📊"},
+    {id:"l2",title:"Surfers Jewelry Inventory",url:"https://connectwithpier.github.io/Surfers-Jewelry-Inventory-Levels/",client:"sj",emoji:"💎"},
+    {id:"l3",title:"Google Drive",url:"https://drive.google.com",client:"all",emoji:"📁"}
+  ],
+  notes:[
+    {id:"n1",title:"Apps Script Gotchas",content:"Every code change requires redeploying as New version.\n\nBound script: Extensions -> Apps Script from within the sheet.\n\nAuthorize via authorize() helper.",date:new Date().toISOString()},
+    {id:"n2",title:"Onboarding Verinelle",content:"Still in onboarding stage.\n- Set up channels\n- Document SOP\n- Define ticket workflow\n- Set KPI baselines",date:new Date().toISOString()}
+  ],
+  creds:[],
+  driveFolders:{
+    "aw":"https://drive.google.com/drive/folders/1laaOJ3Uvrg7_uMEmegzVzHEjAsyjo0XI",
+    "po":"https://drive.google.com/drive/folders/163gymPVtS7sgCchZbX7O30dY3huK8hnl",
+    "mt":"https://drive.google.com/drive/folders/1Rx4VfEFuAssG8xrMQG_yLJJr8mfkrcLx",
+    "ve":"https://drive.google.com/drive/folders/1rJlP0A7vcxN7AksoZpIVt0q9qf5He3gl",
+    "sj":"https://drive.google.com/drive/folders/1oItDm_FgnMth0SGpvkwlocWRvdRIha4A"
+  },
+  calendarIds:[
+    "connectwithpier@gmail.com",
+    "piersurfersjewelry@gmail.com",
+    "pier.verinelle@gmail.com"
+  ],
+  calClientMap:{
+    "connectwithpier@gmail.com":null,
+    "piersurfersjewelry@gmail.com":"sj",
+    "pier.verinelle@gmail.com":"ve"
+  }
+};
+
+const SL={pending:"Pending",inprogress:"In Progress",completed:"Completed",stopped:"On Hold"};
+const SC={pending:{bg:"#faf0e8",color:"#b85c1a"},inprogress:{bg:"#eaeff8",color:"#2d5fa8"},completed:{bg:"#eaf4f0",color:"#2d7a5f"},stopped:{bg:"#eef0f4",color:"#5a6476"}};
+
+function load(){
+  var keys=["pier_cwp","pier_v5","pier_v4","pier_v3","pier_v2","pier_v1","pier_os_v2","pier_os_v1"];
+  for(var i=0;i<keys.length;i++){
+    try{
+      var r=localStorage.getItem(keys[i]);
+      if(r){var d=JSON.parse(r);if(d&&d.clients){if(keys[i]!==SK){localStorage.setItem(SK,JSON.stringify(d));localStorage.removeItem(keys[i]);}return d;}}
+    }catch(e){}
+  }
+  return null;
+}
+function save(d){try{localStorage.setItem(SK,JSON.stringify(d));}catch{}}
+
+// CSS
+const css=`
+.app{display:flex;min-height:88vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;background:#faf9f7;color:#0f0e0d;border-radius:14px;overflow:hidden;box-shadow:0 8px 48px rgba(0,0,0,0.12);}
+.sb{width:210px;min-width:210px;background:#0f0e0d;display:flex;flex-direction:column;padding:22px 0 16px;}
+.sb-logo{padding:0 20px 20px;border-bottom:1px solid rgba(255,255,255,0.08);}
+.sb-wm{font-size:21px;color:#fff;font-weight:700;letter-spacing:-0.4px;}
+.sb-tg{font-size:10px;color:#c9a84c;text-transform:uppercase;letter-spacing:1.6px;margin-top:2px;font-weight:500;}
+.sb-nav{padding:14px 8px;flex:1;}
+.sb-nl{font-size:9px;text-transform:uppercase;letter-spacing:1.8px;color:rgba(255,255,255,0.28);padding:0 10px;margin-bottom:4px;margin-top:14px;}
+.sb-ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:rgba(255,255,255,0.52);cursor:pointer;font-size:13px;font-weight:500;border:none;background:none;width:100%;text-align:left;transition:all 0.15s;}
+.sb-ni:hover{background:rgba(255,255,255,0.08);color:#fff;}
+.sb-ni.act{background:rgba(201,168,76,0.13);color:#c9a84c;}
+.sb-ft{padding:12px 20px 0;border-top:1px solid rgba(255,255,255,0.08);font-family:monospace;font-size:10.5px;color:rgba(255,255,255,0.3);line-height:1.8;}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.tb{background:#fff;border-bottom:1px solid #e8e5e1;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tb-title{font-size:18px;font-weight:700;letter-spacing:-0.3px;}
+.content{padding:22px;flex:1;overflow-y:auto;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all 0.15s;}
+.btn-dk{background:#0f0e0d;color:#fff;}.btn-dk:hover{background:#2a2927;}
+.btn-gd{background:#c9a84c;color:#fff;}.btn-gd:hover{background:#b8973a;}
+.btn-ot{background:transparent;color:#4a4845;border:1.5px solid #e8e5e1;}.btn-ot:hover{background:#f0ede9;}
+.btn-rd{background:#faeaea;color:#a83232;border:1.5px solid #f0c8c8;}.btn-rd:hover{background:#f5d5d5;}
+.btn-sm{padding:4px 10px;font-size:11.5px;}
+.card{background:#fff;border:1px solid #e8e5e1;border-radius:12px;}
+.card-hd{padding:13px 16px 11px;border-bottom:1px solid #f0ede9;display:flex;align-items:center;justify-content:space-between;}
+.card-bd{padding:13px 16px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.stat{background:#fff;border:1px solid #e8e5e1;border-radius:12px;padding:16px 18px;position:relative;}
+.stat-l{font-size:11px;color:#9a9693;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;}
+.stat-v{font-size:28px;font-weight:700;margin-top:3px;letter-spacing:-1px;}
+.stat-s{font-size:11.5px;color:#9a9693;margin-top:2px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
+.cc{background:#fff;border:1px solid #e8e5e1;border-radius:12px;overflow:hidden;}
+.cc-hd{padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.cc-dot{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.tr{display:flex;align-items:center;gap:7px;padding:7px 16px;border-bottom:1px solid #f0ede9;}
+.tr:last-child{border-bottom:none;}
+.tt{flex:1;font-size:12.5px;color:#4a4845;line-height:1.4;}
+.tt-done{text-decoration:line-through;color:#9a9693;}
+.tt-stop{color:#9a9693;font-style:italic;}
+.tsel{font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #e8e5e1;background:#faf9f7;cursor:pointer;font-family:inherit;color:#4a4845;outline:none;flex-shrink:0;}
+.tdel{background:none;border:none;cursor:pointer;color:#b0aba7;font-size:13px;padding:2px 4px;border-radius:3px;flex-shrink:0;line-height:1;}
+.tdel:hover{background:#faeaea;color:#a83232;}
+.ar{padding:9px 16px 13px;display:flex;gap:7px;}
+.inp{padding:7px 11px;border:1.5px solid #e8e5e1;border-radius:8px;font-size:13px;font-family:inherit;color:#0f0e0d;background:#faf9f7;outline:none;transition:border-color 0.15s;}
+.inp:focus{border-color:#c9a84c;}
+.inp::placeholder{color:#c8c5c0;}
+.cc-ft{padding:8px 16px 13px;border-top:1px solid #f0ede9;}
+.tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#c9a84c;background:rgba(201,168,76,0.1);padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;}
+.ev-item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#faf9f7;border:1px solid #e8e5e1;border-radius:8px;border-left:3px solid #c9a84c;margin-bottom:8px;}
+.ev-time{font-family:monospace;font-size:11px;color:#c9a84c;font-weight:600;white-space:nowrap;}
+.cal-wrap{display:grid;grid-template-columns:310px 1fr;gap:16px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-dl{text-align:center;font-size:10px;font-weight:700;color:#9a9693;padding:5px 0;text-transform:uppercase;}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:12.5px;cursor:pointer;color:#4a4845;transition:all 0.15s;position:relative;}
+.cal-day:hover{background:#f0ede9;}
+.cal-today{background:#0f0e0d !important;color:#fff !important;font-weight:700;}
+.cal-sel{background:#c9a84c !important;color:#fff !important;}
+.cal-other{color:#c8c5c0;}
+.vg{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+.vi{background:#fff;border:1px solid #e8e5e1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:7px;}
+.nl{display:grid;grid-template-columns:210px 1fr;gap:16px;min-height:400px;}
+.ni{padding:9px 11px;border-radius:8px;cursor:pointer;border:1.5px solid transparent;transition:all 0.15s;}
+.ni:hover{background:#f0ede9;}
+.ni.act{background:rgba(201,168,76,0.1);border-color:#e8d9b0;}
+.kc{background:#fff;border:1px solid #e8e5e1;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:9px;}
+.kr{display:flex;align-items:center;gap:7px;}
+.kl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9a9693;width:64px;flex-shrink:0;}
+.kv{font-family:monospace;font-size:12px;color:#4a4845;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kb{background:none;border:none;cursor:pointer;font-size:13px;color:#9a9693;padding:2px 5px;border-radius:4px;flex-shrink:0;transition:all 0.1s;}
+.kb:hover{background:#f0ede9;color:#0f0e0d;}
+.folder{margin-bottom:14px;border:1px solid #e8e5e1;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.03);}
+.folder-hd{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;user-select:none;transition:background 0.15s;}
+.folder-hd:hover{background:#faf9f7;}
+.folder-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.folder-body{border-top:1px solid #f0ede9;}
+.pin-screen{background:#0f0e0d;min-height:500px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;border-radius:12px;}
+.pin-dot{width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,0.28);transition:all 0.15s;}
+.pin-dot.on{background:#c9a84c;border-color:#c9a84c;}
+.pin-pad{display:grid;grid-template-columns:repeat(3,56px);gap:8px;}
+.pin-key{width:56px;height:56px;border-radius:50%;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;transition:all 0.15s;}
+.pin-key:hover{background:rgba(255,255,255,0.14);border-color:#c9a84c;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:440px;border:1px solid #e8e5e1;box-shadow:0 20px 60px rgba(0,0,0,0.2);overflow:hidden;max-height:92vh;overflow-y:auto;}
+.modal-hd{padding:18px 22px 14px;border-bottom:1px solid #f0ede9;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1;}
+.modal-bd{padding:18px 22px;display:flex;flex-direction:column;gap:12px;}
+.modal-ft{padding:12px 22px;border-top:1px solid #f0ede9;display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#fff;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fl{font-size:11px;font-weight:700;color:#4a4845;text-transform:uppercase;letter-spacing:0.5px;}
+.fsel,.fta{padding:8px 11px;border:1.5px solid #e8e5e1;border-radius:8px;font-size:13px;font-family:inherit;color:#0f0e0d;background:#faf9f7;outline:none;transition:border-color 0.15s;}
+.fsel:focus,.fta:focus{border-color:#c9a84c;}
+.fta{resize:vertical;min-height:68px;line-height:1.6;}
+.toast-bar{position:fixed;bottom:20px;right:20px;background:#0f0e0d;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.25);animation:tin 0.25s ease;}
+@keyframes tin{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.tabs{display:flex;gap:0;background:#f0ede9;border-radius:9px;padding:3px;width:fit-content;margin-bottom:20px;}
+.tab{padding:6px 18px;border-radius:7px;border:none;font-size:12.5px;font-weight:600;cursor:pointer;background:transparent;color:#9a9693;font-family:inherit;transition:all 0.15s;}
+.tab.on{background:#fff;color:#0f0e0d;box-shadow:0 1px 4px rgba(0,0,0,0.08);}
+.drive-card{background:#fff;border:2px solid #e8e5e1;border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:14px;text-decoration:none;transition:all 0.18s;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.tip{background:#faf9f7;border:1px solid #f0ede9;border-radius:10px;padding:13px 15px;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.spin{animation:spin 1s linear infinite;display:inline-block;}
+.warn-bar{font-size:11.5px;color:#b85c1a;background:#faf0e8;padding:5px 11px;border-radius:7px;font-weight:500;border:1px solid #f0c8a0;}
+`;
+
+function App(){
+  const [D,setD]=useState(()=>{
+    const s=load();
+    if(s){
+      if(!s.creds)s.creds=[];
+      if(!s.driveFolders)s.driveFolders={};
+      if(!s.calendarIds)s.calendarIds=DEFAULTS.calendarIds;
+      if(!s.calClientMap)s.calClientMap=DEFAULTS.calClientMap;
+      if(!s.notes)s.notes=[];
+      if(!s.events)s.events=[];
+      if(!s.links)s.links=[];
+      if(!s.docs)s.docs=[];
+      return s;
+    }
+    return JSON.parse(JSON.stringify(DEFAULTS));
+  });
+  const [migrated]=useState(()=>!!load());
+  const [sec,setSec]=useState("overview");
+  const [pinOk,setPinOk]=useState(false);
+  const [toast,setToast]=useState(null);
+  const [modal,setModal]=useState(null);
+  const [pin,setPin]=useState({show:false,mode:"unlock",buf:"",temp:"",err:"",hint:"",cb:null});
+  const [cal,setCal]=useState(()=>{const n=new Date();return{year:n.getFullYear(),month:n.getMonth(),sel:n.toISOString().slice(0,10)};});
+  const [nid,setNid]=useState(null);
+  const [ntitle,setNtitle]=useState("");
+  const [nbody,setNbody]=useState("");
+  const [syncSt,setSyncSt]=useState("idle");
+  const ntRef=useRef(null);
+  const ttRef=useRef(null);
+  const syncRef=useRef(null);
+
+  useEffect(()=>{save(D);},[D]);
+
+  const toast_=useCallback(msg=>{
+    setToast(msg);
+    clearTimeout(ttRef.current);
+    ttRef.current=setTimeout(()=>setToast(null),2400);
+  },[]);
+
+  const cn=id=>D.clients.find(c=>c.id===id)?.name||"General";
+
+  // Calendar sync
+  const syncCal=useCallback(async()=>{
+    if(window.location.protocol==="file:"){setSyncSt("file");return;}
+    setSyncSt("syncing");
+    try{
+      const now=new Date();
+      const start=now.toISOString();
+      const end=new Date(now.getTime()+30*24*60*60*1000).toISOString();
+      const calIds=(D.calendarIds||DEFAULTS.calendarIds).join(", ");
+      const resp=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:2000,
+          system:"You are a calendar sync assistant. Fetch events from multiple Google calendars. Return ONLY a JSON array, no markdown. Each item: {id,title,date(YYYY-MM-DD),time(HH:MM 24h or empty),note(empty if none),calendarId}. Max 100 events. If none, return [].",
+          messages:[{role:"user",content:"List all events from "+start+" to "+end+" from calendars: "+calIds+". Return flat JSON array."}],
+          mcp_servers:[{type:"url",url:"https://calendarmcp.googleapis.com/mcp/v1",name:"google-calendar"}]
+        })
+      });
+      if(!resp.ok)throw new Error("API "+resp.status);
+      const data=await resp.json();
+      const text=data.content.filter(b=>b.type==="text").map(b=>b.text).join("");
+      const clean=text.replace(/```json|```/g,"").trim();
+      const evts=JSON.parse(clean);
+      if(!Array.isArray(evts))throw new Error("Bad format");
+      const calMap=D.calClientMap||DEFAULTS.calClientMap;
+      setD(d=>{
+        const manual=d.events.filter(e=>!e.fromGcal);
+        const seen=new Set();
+        const gcal=evts.filter(e=>{if(seen.has(e.id))return false;seen.add(e.id);return true;})
+          .map(e=>({id:"gcal-"+e.id,title:e.title,date:e.date,time:e.time||"",note:e.note||"",fromGcal:true,calendarId:e.calendarId||null,clientId:calMap[e.calendarId]||null}));
+        return {...d,events:[...manual,...gcal]};
+      });
+      setSyncSt("synced");
+      toast_("Calendar synced - "+evts.length+" events loaded");
+    }catch(e){
+      console.error("Calendar sync:",e.message||e);
+      setSyncSt("error");
+      // Don't show error toast - sync requires GitHub Pages hosting
+    }
+  },[D,toast_]);
+
+  useEffect(()=>{
+    const isLocal = window.location.protocol==="file:" || window.location.hostname==="localhost";
+    if(isLocal){setSyncSt("file");return;}
+    syncCal();
+    syncRef.current=setInterval(syncCal,30*60*1000);
+    return()=>clearInterval(syncRef.current);
+  },[]);
+
+  // Navigation
+  const go=s=>{
+    if(s!=="credentials")setPinOk(false);
+    setSec(s);
+    if(s==="notes"&&!nid&&D.notes.length>0){const n=D.notes[0];setNid(n.id);setNtitle(n.title);setNbody(n.content);}
+  };
+
+  const goCreds=()=>{
+    if(pinOk){go("credentials");return;}
+    const sp=localStorage.getItem(PK);
+    if(!sp)setPin({show:true,mode:"set-new",buf:"",temp:"",err:"",hint:"Choose a 4-digit PIN to protect credentials.",cb:()=>{setPinOk(true);setSec("credentials");}});
+    else setPin({show:true,mode:"unlock",buf:"",temp:"",err:"",hint:"",cb:()=>{setPinOk(true);setSec("credentials");}});
+  };
+
+  const pinKey=k=>{
+    setPin(p=>{
+      if(p.buf.length>=4)return p;
+      const buf=p.buf+k;
+      if(buf.length===4){
+        setTimeout(()=>{
+          setPin(pp=>{
+            const stored=localStorage.getItem(PK);
+            if(pp.mode==="unlock"){
+              if(buf===stored){setTimeout(()=>{if(pp.cb)pp.cb();},50);return{...pp,show:false,buf:""};}
+              return{...pp,buf:"",err:"Incorrect PIN. Try again."};
+            }else if(pp.mode==="set-new"){
+              return{...pp,buf:"",temp:buf,mode:"confirm",err:"",hint:"Enter the same PIN again."};
+            }else{
+              if(buf===pp.temp){localStorage.setItem(PK,buf);setTimeout(()=>{toast_("PIN set");if(pp.cb)pp.cb();},50);return{...pp,show:false,buf:"",temp:""};}
+              return{...pp,buf:"",temp:"",err:"PINs did not match. Try again.",mode:"set-new",hint:"Choose a new PIN."};
+            }
+          });
+        },120);
+      }
+      return{...p,buf,err:""};
+    });
+  };
+
+  const changePin=()=>{setPinOk(false);localStorage.removeItem(PK);setPin({show:true,mode:"set-new",buf:"",temp:"",err:"",hint:"Choose a new PIN.",cb:()=>{setPinOk(true);setSec("credentials");toast_("PIN updated");}});};
+
+  // Tasks
+  const addTask=(cid,text)=>{if(!text.trim())return;setD(d=>({...d,clients:d.clients.map(c=>c.id===cid?{...c,tasks:[...c.tasks,{id:"t"+Date.now(),text:text.trim(),status:"pending"}]}:c)}));toast_("Task added");};
+  const updTask=(cid,tid,status)=>setD(d=>({...d,clients:d.clients.map(c=>c.id===cid?{...c,tasks:c.tasks.map(t=>t.id===tid?{...t,status}:t)}:c)}));
+  const delTask=(cid,tid)=>{setD(d=>({...d,clients:d.clients.map(c=>c.id===cid?{...c,tasks:c.tasks.filter(t=>t.id!==tid)}:c)}));toast_("Task removed");};
+
+  // Notes
+  const openNote=n=>{setNid(n.id);setNtitle(n.title);setNbody(n.content);};
+  const onNC=(field,val)=>{
+    if(field==="title")setNtitle(val);else setNbody(val);
+    clearTimeout(ntRef.current);
+    ntRef.current=setTimeout(()=>{
+      const t=field==="title"?val:ntitle;
+      const b=field==="body"?val:nbody;
+      setD(d=>({...d,notes:d.notes.map(n=>n.id===nid?{...n,title:t,content:b,date:new Date().toISOString()}:n)}));
+    },500);
+  };
+  const newNote=()=>{const id="n"+Date.now();const n={id,title:"",content:"",date:new Date().toISOString()};setD(d=>({...d,notes:[n,...d.notes]}));setNid(id);setNtitle("");setNbody("");};
+  const delNote=()=>{setD(d=>({...d,notes:d.notes.filter(n=>n.id!==nid)}));setNid(null);setNtitle("");setNbody("");toast_("Note deleted");};
+
+  // Export/import
+  const exportAll=()=>{const b=new Blob([JSON.stringify(D,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="pier-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();toast_("Exported");};
+  const importAll=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(!d.clients){toast_("Invalid file");return;}if(!d.creds)d.creds=[];setD(d);toast_("Import successful");}catch{toast_("Error reading file");}};r.readAsText(f);};
+
+  const TITLES={overview:"Overview",clients:"Clients",calendar:"Calendar",vault:"Document Vault",links:"Links",notes:"Notes",credentials:"Credentials"};
+  const NAVS=[
+    {s:"overview",l:"Overview",i:"⚡",g:"Workspace"},
+    {s:"clients",l:"Clients",i:"🏢"},
+    {s:"calendar",l:"Calendar",i:"📅"},
+    {s:"vault",l:"Document Vault",i:"🗂",g:"Resources"},
+    {s:"links",l:"Links",i:"🔗"},
+    {s:"notes",l:"Notes",i:"📝"},
+    {s:"credentials",l:"Credentials",i:"🔐"},
+  ];
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <nav className="sb">
+          <div className="sb-logo"><div className="sb-wm">Pier</div><div className="sb-tg">Connect with Pier</div></div>
+          <div className="sb-nav">
+            {NAVS.map(n=>(
+              <div key={n.s}>
+                {n.g&&<div className="sb-nl">{n.g}</div>}
+                <button className={"sb-ni"+(sec===n.s?" act":"")} onClick={()=>n.s==="credentials"?goCreds():go(n.s)}>
+                  <span style={{fontSize:15}}>{n.i}</span><span>{n.l}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="sb-ft"><Clock/></div>
+        </nav>
+
+        <div className="main">
+          <div className="tb">
+            <div className="tb-title">{TITLES[sec]||sec}</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {sec==="clients"&&<button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addClient"})}>+ Add Client</button>}
+              {sec==="credentials"&&<button className="btn btn-ot btn-sm" onClick={changePin}>Change PIN</button>}
+              {syncSt==="file"
+                ?<div className="warn-bar">Host on GitHub to sync calendar</div>
+                :<button className="btn btn-ot btn-sm" onClick={syncCal} disabled={syncSt==="syncing"} style={{opacity:syncSt==="syncing"?0.6:1}}>
+                  <span className={syncSt==="syncing"?"spin":""}>🔄</span>
+                  <span>{syncSt==="syncing"?"Syncing":syncSt==="synced"?"Synced":"Sync Calendar"}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div className="content">
+            {pin.show
+              ? <PinScreen pin={pin} setPin={setPin} pinKey={pinKey}/>
+              : sec==="overview"?<Overview D={D} go={go} cn={cn} setModal={setModal}/>
+              : sec==="clients"?<Clients D={D} setD={setD} addTask={addTask} updTask={updTask} delTask={delTask} toast_={toast_}/>
+              : sec==="calendar"?<Calendar D={D} setD={setD} cal={cal} setCal={setCal} setModal={setModal}/>
+              : sec==="vault"?<Vault D={D} setD={setD} cn={cn} toast_={toast_} setModal={setModal} exportAll={exportAll} importAll={importAll}/>
+              : sec==="links"?<Links D={D} setD={setD} cn={cn} toast_={toast_} setModal={setModal}/>
+              : sec==="notes"?<Notes D={D} nid={nid} ntitle={ntitle} nbody={nbody} openNote={openNote} onNC={onNC} newNote={newNote} delNote={delNote}/>
+              : sec==="credentials"?<Credentials D={D} setD={setD} cn={cn} toast_={toast_} setModal={setModal}/>
+              : null
+            }
+          </div>
+        </div>
+      </div>
+
+      {modal&&<Modal modal={modal} setModal={setModal} D={D} setD={setD} cal={cal} toast_={toast_}/>}
+      {toast&&<div className="toast-bar">✓ {toast}</div>}
+    </>
+  );
+}
+
+function Clock(){
+  const [n,setN]=useState(new Date());
+  useEffect(()=>{const t=setInterval(()=>setN(new Date()),30000);return()=>clearInterval(t);},[]);
+  const days=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  return <>{days[n.getDay()]}<br/>{n.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}<br/>{n.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}</>;
+}
+
+function PinScreen({pin,setPin,pinKey}){
+  const labels={"unlock":"Enter your PIN","set-new":"Create a 4-digit PIN","confirm":"Confirm your PIN"};
+  return(
+    <div className="pin-screen">
+      <div style={{fontSize:22,fontWeight:700,color:"#fff"}}>Pier</div>
+      <div style={{fontSize:9,color:"#c9a84c",textTransform:"uppercase",letterSpacing:"1.6px",marginTop:-14}}>Connect with Pier</div>
+      <div style={{fontSize:13,color:"rgba(255,255,255,0.6)"}}>{labels[pin.mode]||"Enter PIN"}</div>
+      <div style={{display:"flex",gap:10}}>{[0,1,2,3].map(i=><div key={i} className={"pin-dot"+(i<pin.buf.length?" on":"")}/>)}</div>
+      <div style={{fontSize:12,color:"#f28b82",minHeight:18}}>{pin.err}</div>
+      <div className="pin-pad">
+        {[1,2,3,4,5,6,7,8,9].map(k=><button key={k} className="pin-key" onClick={()=>pinKey(String(k))}>{k}</button>)}
+        <button className="pin-key" onClick={()=>setPin(p=>({...p,buf:p.buf.slice(0,-1),err:""}))} style={{gridColumn:1}}>&#9003;</button>
+        <button className="pin-key" onClick={()=>pinKey("0")} style={{gridColumn:2}}>0</button>
+      </div>
+      {pin.hint&&<div style={{fontSize:11.5,color:"rgba(255,255,255,0.4)",textAlign:"center",maxWidth:240,lineHeight:1.7}}>{pin.hint}</div>}
+      <button onClick={()=>setPin(p=>({...p,show:false,buf:""}))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",fontSize:12,cursor:"pointer"}}>Go back</button>
+    </div>
+  );
+}
+
+function Overview({D,go,cn,setModal}){
+  const all=D.clients.flatMap(c=>c.tasks);
+  const p=all.filter(t=>t.status==="pending").length;
+  const ip=all.filter(t=>t.status==="inprogress").length;
+  const done=all.filter(t=>t.status==="completed").length;
+  const focus=D.clients.flatMap(c=>c.tasks.filter(t=>t.status==="pending"||t.status==="inprogress").map(t=>({...t,ce:c.emoji}))).slice(0,6);
+  const now=new Date();
+  const up=D.events.filter(e=>new Date(e.date+"T"+(e.time||"00:00"))>=now).sort((a,b)=>a.date+a.time>b.date+b.time?1:-1).slice(0,5);
+  const CC={aw:"#2d7a5f",po:"#b85c1a",mt:"#2d5fa8",sj:"#7a4fb5",ve:"#c9a84c"};
+  return(
+    <>
+      <div className="g4">
+        {[["Total Clients",D.clients.length,"Active engagements"],["Open Tasks",p+ip,p+" pending - "+ip+" in progress"],["Completed",done,"Tasks done"],["Docs & Links",D.docs.length,D.links.length+" saved links"]].map(([l,v,s])=>(
+          <div className="stat" key={l}>
+            <div className="stat-l">{l}</div>
+            <div className="stat-v">{v}</div>
+            <div className="stat-s">{s}</div>
+            {l==="Total Clients"&&<button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addClient"})} style={{position:"absolute",top:12,right:12,fontSize:10.5}}>+ Add</button>}
+          </div>
+        ))}
+      </div>
+      <div className="two-col">
+        <div className="card">
+          <div className="card-hd"><span style={{fontWeight:700,fontSize:13}}>Today's Focus</span><button className="btn btn-ot btn-sm" onClick={()=>go("clients")}>All tasks</button></div>
+          <div className="card-bd">
+            {focus.length===0?<Empty icon="✅" text="All clear - no open tasks."/>:focus.map(t=>(
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #f0ede9"}}>
+                <span style={{fontSize:14}}>{t.ce}</span>
+                <div style={{flex:1,fontSize:"12.5px",color:"#4a4845",lineHeight:1.3}}>{t.text}</div>
+                <span className="badge" style={{background:SC[t.status].bg,color:SC[t.status].color}}>{SL[t.status]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-hd"><span style={{fontWeight:700,fontSize:13}}>Upcoming Meetings</span><button className="btn btn-ot btn-sm" onClick={()=>go("calendar")}>Calendar</button></div>
+          <div className="card-bd">
+            {up.length===0?<Empty icon="📅" text="No upcoming meetings."/>:up.map(e=>{
+              const cc=e.clientId?CC[e.clientId]:null;
+              return(
+                <div key={e.id} className="ev-item" style={{borderLeftColor:cc||"#c9a84c"}}>
+                  <div className="ev-time">{e.date}<br/>{e.time||""}</div>
+                  <div><div style={{fontSize:13,fontWeight:600}}>{e.title}</div>{e.note&&<div style={{fontSize:11,color:"#9a9693",marginTop:1}}>{e.note}</div>}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ClientCard({c,addTask,updTask,delTask,setD}){
+  const [nt,setNt]=useState("");
+  const sub=()=>{addTask(c.id,nt);setNt("");};
+  return(
+    <div className="cc">
+      <div className="cc-hd">
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#0f0e0d"}}>{c.name}</div>
+            <button className="tdel" onClick={()=>{const n=prompt("Client name:",c.name);if(n&&n.trim())setD(d=>({...d,clients:d.clients.map(cl=>cl.id===c.id?{...cl,name:n.trim()}:cl)}));}}>✏️</button>
+          </div>
+          <div style={{fontSize:11.5,color:"#9a9693",marginTop:2}}>{c.role}</div>
+          <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.8px",color:"#c9a84c",marginTop:3}}>{c.niche}</div>
+        </div>
+        <div className="cc-dot" style={{background:c.color+"18"}}>{c.emoji}</div>
+      </div>
+      <div>
+        {c.tasks.length===0?<div style={{padding:"8px 16px",fontSize:12,color:"#9a9693"}}>No tasks yet.</div>:
+          c.tasks.map(t=>(
+            <div className="tr" key={t.id}>
+              <div className={"tt"+(t.status==="completed"?" tt-done":t.status==="stopped"?" tt-stop":"")}>{t.text}</div>
+              <select className="tsel" value={t.status} onChange={e=>updTask(c.id,t.id,e.target.value)}>
+                <option value="pending">Pending</option>
+                <option value="inprogress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="stopped">On Hold</option>
+              </select>
+              <button className="tdel" onClick={()=>delTask(c.id,t.id)}>✕</button>
+            </div>
+          ))
+        }
+      </div>
+      <div className="ar">
+        <input className="inp" style={{flex:1}} placeholder="Add a task..." value={nt} onChange={e=>setNt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sub()}/>
+        <button className="btn btn-gd btn-sm" onClick={sub}>Add</button>
+      </div>
+      <div className="cc-ft">
+        <button className="btn btn-rd btn-sm" onClick={()=>{if(window.confirm("Remove this client?"))setD(d=>({...d,clients:d.clients.filter(cl=>cl.id!==c.id)}));}}>Remove client</button>
+      </div>
+    </div>
+  );
+}
+
+function Clients({D,setD,addTask,updTask,delTask,toast_}){
+  return <div className="cg">{D.clients.map(c=><ClientCard key={c.id} c={c} addTask={addTask} updTask={updTask} delTask={delTask} setD={setD}/>)}</div>;
+}
+
+function Calendar({D,setD,cal,setCal,setModal}){
+  const {year,month,sel}=cal;
+  const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const today=new Date().toISOString().slice(0,10);
+  const fd=new Date(year,month,1).getDay();
+  const dim=new Date(year,month+1,0).getDate();
+  const pd=new Date(year,month,0).getDate();
+  const shift=d=>setCal(s=>{let m=s.month+d,y=s.year;if(m>11){m=0;y++;}else if(m<0){m=11;y--;}return{...s,month:m,year:y};});
+  const CC={aw:"#2d7a5f",po:"#b85c1a",mt:"#2d5fa8",sj:"#7a4fb5",ve:"#c9a84c"};
+  const days=[];
+  for(let i=0;i<fd;i++)days.push({d:pd-fd+1+i,other:true});
+  for(let d=1;d<=dim;d++){
+    const ds=year+"-"+String(month+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    const evs=D.events.filter(e=>e.date===ds);
+    const dot=evs.length>0?(evs[0].clientId?CC[evs[0].clientId]:"#c9a84c"):null;
+    days.push({d,ds,isT:ds===today,isS:ds===sel,dot});
+  }
+  const rem=42-fd-dim;for(let d=1;d<=rem;d++)days.push({d,other:true});
+  const sevs=D.events.filter(e=>e.date===sel).sort((a,b)=>a.time>b.time?1:-1);
+  const lbl=sel?new Date(sel+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}):"Events";
+  return(
+    <div className="cal-wrap">
+      <div className="card">
+        <div className="card-bd">
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <button className="btn btn-ot btn-sm" onClick={()=>shift(-1)}>&#8249;</button>
+            <div style={{fontWeight:700,fontSize:16}}>{MN[month]} {year}</div>
+            <button className="btn btn-ot btn-sm" onClick={()=>shift(1)}>&#8250;</button>
+          </div>
+          <div className="cal-grid">
+            {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} className="cal-dl">{d}</div>)}
+            {days.map((dy,i)=>(
+              <div key={i} onClick={()=>dy.ds&&setCal(s=>({...s,sel:dy.ds}))}
+                className={"cal-day"+(dy.other?" cal-other":dy.isS?" cal-sel":dy.isT?" cal-today":"")}
+                style={{position:"relative"}}>
+                {dy.d}
+                {dy.dot&&!dy.other&&<span style={{position:"absolute",bottom:3,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:dy.isS||dy.isT?"rgba(255,255,255,0.8)":dy.dot,display:"block"}}/>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{fontWeight:700,fontSize:15}}>{lbl}</div>
+          <button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addEvent",date:sel})}>+ Add Event</button>
+        </div>
+        {sevs.length===0?<Empty icon="📅" text="No events. Click a date then add one."/>:
+          sevs.map(e=>{
+            const CC2={aw:"#2d7a5f",po:"#b85c1a",mt:"#2d5fa8",sj:"#7a4fb5",ve:"#c9a84c"};
+            const cn2={aw:"American Wellness",po:"Paw Origins",mt:"MT Global",sj:"Surfers Jewelry",ve:"Verinelle"};
+            const cc=e.clientId?CC2[e.clientId]:null;
+            const cname=e.clientId?cn2[e.clientId]:null;
+            return(
+              <div key={e.id} className="ev-item" style={{borderLeftColor:cc||"#c9a84c"}}>
+                <div className="ev-time">{e.time||"--"}</div>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{e.title}</div>
+                    {cname&&<span style={{fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",color:cc,background:cc+"18",padding:"1px 6px",borderRadius:20}}>{cname}</span>}
+                    {e.fromGcal&&<span style={{fontSize:9,color:"#9a9693",background:"#f0ede9",padding:"1px 5px",borderRadius:10}}>gcal</span>}
+                  </div>
+                  {e.note&&<div style={{fontSize:11,color:"#9a9693",marginTop:1}}>{e.note}</div>}
+                </div>
+                {!e.fromGcal&&<button style={{background:"none",border:"none",cursor:"pointer",color:"#9a9693",fontSize:14,lineHeight:1}} onClick={()=>setD(d=>({...d,events:d.events.filter(ev=>ev.id!==e.id)}))}>✕</button>}
+              </div>
+            );
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+function Vault({D,setD,cn,toast_,setModal,exportAll,importAll}){
+  const [tab,setTab]=useState("drive");
+  const df=D.driveFolders||{};
+  return(
+    <>
+      <div className="tabs">
+        <button className={"tab"+(tab==="drive"?" on":"")} onClick={()=>setTab("drive")}>📁 Google Drive</button>
+        <button className={"tab"+(tab==="manual"?" on":"")} onClick={()=>setTab("manual")}>📌 Manual Docs</button>
+      </div>
+      {tab==="drive"&&(
+        <>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+            <div style={{fontSize:13,color:"#9a9693"}}>{D.clients.length} client folders - click to open in Drive</div>
+            <a href="https://drive.google.com" target="_blank" rel="noreferrer" className="btn btn-ot btn-sm">Open Drive</a>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14,marginBottom:28}}>
+            {D.clients.map(c=>{
+              const url=df[c.id]||null;
+              return url
+                ? <a key={c.id} href={url} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}>
+                    <div className="drive-card" onMouseEnter={e=>{e.currentTarget.style.borderColor=c.color;e.currentTarget.style.boxShadow="0 4px 16px "+c.color+"28";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8e5e1";e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)";}}>
+                      <div style={{width:46,height:46,borderRadius:11,background:c.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{c.emoji}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:14,color:"#0f0e0d"}}>{c.name}</div>
+                        <div style={{fontSize:11.5,color:c.color,marginTop:2,fontWeight:500}}>Open folder</div>
+                      </div>
+                      <span style={{fontSize:20,color:"#e8e5e1"}}>📁</span>
+                    </div>
+                  </a>
+                : <div key={c.id} style={{background:"#faf9f7",border:"2px dashed #e8e5e1",borderRadius:12,padding:"18px 20px",display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:46,height:46,borderRadius:11,background:c.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{c.emoji}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:14,color:"#0f0e0d"}}>{c.name}</div>
+                      <div style={{fontSize:11.5,color:"#9a9693",marginTop:2}}>No Drive folder linked</div>
+                    </div>
+                    <button className="btn btn-ot btn-sm" onClick={()=>{const u=window.prompt("Paste Google Drive folder URL for "+c.name+":");if(u&&u.trim())setD(d=>({...d,driveFolders:{...(d.driveFolders||{}),[c.id]:u.trim()}}));}}>+ Link</button>
+                  </div>;
+            })}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:12,margin:"20px 0"}}>
+            <div style={{flex:1,height:1,background:"#f0ede9"}}/>
+            <div style={{fontSize:11,fontWeight:600,color:"#b0aba7",textTransform:"uppercase",letterSpacing:"1px"}}>Tips</div>
+            <div style={{flex:1,height:1,background:"#f0ede9"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+            {[["📤","Upload files","Drag any file into the client folder in Drive."],["🔗","Share a file","Right-click a file, Share, Copy link, save in Manual Docs."],["📂","Add subfolders","Create /SOPs, /Reports, /Brand Assets inside each folder."],["🔍","Search Drive","Use Drive search to find any file across all client folders."]].map(([icon,title,desc])=>(
+              <div key={title} className="tip">
+                <div style={{fontSize:18,marginBottom:5}}>{icon}</div>
+                <div style={{fontWeight:600,fontSize:12.5,color:"#0f0e0d",marginBottom:3}}>{title}</div>
+                <div style={{fontSize:11.5,color:"#9a9693",lineHeight:1.5}}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {tab==="manual"&&(
+        <>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{fontSize:13,color:"#9a9693"}}>{D.docs.length} saved link{D.docs.length!==1?"s":""}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn btn-ot btn-sm" onClick={exportAll}>Export</button>
+              <label className="btn btn-ot btn-sm" style={{cursor:"pointer"}}>Import<input type="file" accept=".json" onChange={importAll} style={{display:"none"}}/></label>
+              <button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addDoc"})}>+ Add Link</button>
+            </div>
+          </div>
+          {D.docs.length===0?<Empty icon="📌" text="No manual docs yet."/>:
+            <div className="vg">
+              {D.docs.map(d=>(
+                <div key={d.id} className="vi">
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+                    <div style={{fontSize:24}}>{d.icon}</div>
+                    <div className="tag">{cn(d.client)}</div>
+                  </div>
+                  <div style={{fontWeight:700,fontSize:13.5}}>{d.title}</div>
+                  <div style={{fontSize:11.5,color:"#9a9693",lineHeight:1.5,flex:1}}>{d.desc}</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+                    <div style={{fontFamily:"monospace",fontSize:11,color:"#9a9693"}}>{d.date}</div>
+                    <div style={{display:"flex",gap:6}}>
+                      {d.url&&<a href={d.url} target="_blank" rel="noreferrer" className="btn btn-ot btn-sm">Open</a>}
+                      <button className="btn btn-rd btn-sm" onClick={()=>setD(x=>({...x,docs:x.docs.filter(z=>z.id!==d.id)}))}>✕</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+        </>
+      )}
+    </>
+  );
+}
+
+function Links({D,setD,cn,toast_,setModal}){
+  const [open,setOpen]=useState({});
+  const toggle=id=>setOpen(o=>({...o,[id]:o[id]===false?true:false}));
+  const isOpen=id=>open[id]!==false;
+  const allClients=[...D.clients,{id:"all",name:"General",emoji:"🔗",color:"#5a6476"}];
+  return(
+    <>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div style={{fontSize:13,color:"#9a9693"}}>{D.links.length} links across {allClients.length} folders</div>
+        <button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addLink"})}>+ Add Link</button>
+      </div>
+      {allClients.map((c,idx)=>{
+        const links=D.links.filter(l=>l.client===c.id);
+        const open2=isOpen(c.id);
+        const FOLDER_COLORS=["#eaf4f0","#faf0e8","#eaeff8","#f0eafa","#fdf6e3","#eef0f4"];
+        const rowBg=FOLDER_COLORS[idx%FOLDER_COLORS.length];
+        return(
+          <div key={c.id} className="folder" style={{background:rowBg}}>
+            <div className="folder-hd" style={{background:rowBg}} onClick={()=>toggle(c.id)}>
+              <div className="folder-icon" style={{background:(c.color||"#5a6476")+"18"}}>{c.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:13.5,color:"#0f0e0d"}}>{c.name}</div>
+                <div style={{fontSize:11,color:"#9a9693",marginTop:1}}>{links.length} link{links.length!==1?"s":""}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button className="btn btn-dk btn-sm" style={{fontSize:11,padding:"3px 9px"}} onClick={e=>{e.stopPropagation();setModal({id:"addLink",preClient:c.id});}}>+ Add</button>
+                <span style={{color:"#9a9693",fontSize:14,display:"inline-block",transform:open2?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s"}}>&#8250;</span>
+              </div>
+            </div>
+            {open2&&(
+              <div className="folder-body" style={{background:rowBg}}>
+                {links.length===0
+                  ?<div style={{padding:"12px 16px",fontSize:12.5,color:"#b0aba7",fontStyle:"italic"}}>No links yet - click + Add to save one.</div>
+                  :links.map(l=>(
+                    <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #f0ede9",cursor:"pointer",transition:"background 0.12s"}}
+                      onClick={()=>window.open(l.url,"_blank")}
+                      onMouseEnter={e=>e.currentTarget.style.background=rowBg.replace('eaf4f0','d4ecdc').replace('faf0e8','f5e0cc').replace('eaeff8','d4e4f5').replace('f0eafa','e4d4f5').replace('fdf6e3','f5ecc8').replace('eef0f4','dde2ea')}
+                      onMouseLeave={e=>e.currentTarget.style.background=rowBg}>
+                      <div style={{fontSize:18,flexShrink:0}}>{l.emoji||"🔗"}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:"#0f0e0d",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.title}</div>
+                        <div style={{fontSize:11,color:"#2d5fa8",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.url}</div>
+                      </div>
+                      <button style={{background:"none",border:"none",cursor:"pointer",color:"#b0aba7",fontSize:13,padding:"2px 4px",borderRadius:3,lineHeight:1}} onClick={e=>{e.stopPropagation();setD(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}));}} onMouseEnter={e=>e.currentTarget.style.color="#a83232"} onMouseLeave={e=>e.currentTarget.style.color="#b0aba7"}>✕</button>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function Notes({D,nid,ntitle,nbody,openNote,onNC,newNote,delNote}){
+  return(
+    <div className="nl">
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#9a9693",textTransform:"uppercase",letterSpacing:"1px"}}>Notes</div>
+          <button className="btn btn-dk btn-sm" onClick={newNote}>+</button>
+        </div>
+        {D.notes.length===0&&<div style={{fontSize:12,color:"#9a9693"}}>No notes yet.</div>}
+        {D.notes.map(n=>(
+          <div key={n.id} className={"ni"+(n.id===nid?" act":"")} onClick={()=>openNote(n)}>
+            <div style={{fontSize:12.5,fontWeight:600,color:"#0f0e0d",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n.title||"Untitled"}</div>
+            <div style={{fontSize:11,color:"#9a9693",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{(n.content||"").slice(0,55)}</div>
+            <div style={{fontSize:10,color:"#b0aba7",marginTop:3,fontFamily:"monospace"}}>{new Date(n.date).toLocaleDateString()}</div>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{padding:20,display:"flex",flexDirection:"column",gap:8}}>
+        <input value={ntitle} onChange={e=>onNC("title",e.target.value)} placeholder="Note title" style={{fontFamily:"inherit",fontSize:20,fontWeight:700,border:"none",outline:"none",background:"transparent",color:"#0f0e0d",width:"100%"}}/>
+        <div style={{height:1,background:"#f0ede9"}}/>
+        <textarea value={nbody} onChange={e=>onNC("body",e.target.value)} placeholder="Start writing..." style={{flex:1,border:"none",outline:"none",background:"transparent",color:"#4a4845",fontFamily:"inherit",fontSize:13.5,lineHeight:1.8,resize:"none",minHeight:300,padding:0}}/>
+        {nid&&<div><button className="btn btn-rd btn-sm" onClick={delNote}>Delete note</button></div>}
+      </div>
+    </div>
+  );
+}
+
+function Credentials({D,setD,cn,toast_,setModal}){
+  const [shown,setShown]=useState({});
+  const [search,setSearch]=useState("");
+  const [open,setOpen]=useState({});
+  const toggle=id=>setOpen(o=>({...o,[id]:o[id]===false?true:false}));
+  const isOpen=id=>open[id]!==false;
+  const copy=(t,l)=>navigator.clipboard.writeText(t).then(()=>toast_(l+" copied")).catch(()=>window.prompt("Copy:",t));
+  const allClients=[...D.clients,{id:"all",name:"General",emoji:"🔗",color:"#5a6476"}];
+  const filtered=search?D.creds.filter(cr=>cr.title.toLowerCase().includes(search.toLowerCase())||(cr.username||"").toLowerCase().includes(search.toLowerCase())||(cr.notes||"").toLowerCase().includes(search.toLowerCase())):null;
+  return(
+    <>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:200}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search credentials..." className="inp" style={{flex:1,maxWidth:300}}/>
+          {search&&<button onClick={()=>setSearch("")} style={{background:"none",border:"none",cursor:"pointer",color:"#9a9693",fontSize:13}}>✕</button>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{fontSize:13,color:"#9a9693"}}>{D.creds.length} credential{D.creds.length!==1?"s":""}</div>
+          <button className="btn btn-dk btn-sm" onClick={()=>setModal({id:"addCred"})}>+ Add</button>
+        </div>
+      </div>
+      {search?(
+        filtered.length===0?<Empty icon="🔍" text={"No credentials match \""+search+"\""}/>:
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+          {filtered.map(cr=><CredCard key={cr.id} cr={cr} shown={shown} setShown={setShown} copy={copy} setD={setD}/>)}
+        </div>
+      ):(
+        allClients.map((c,idx)=>{
+          const creds=D.creds.filter(cr=>cr.client===c.id||(c.id==="all"&&!D.clients.find(cl=>cl.id===cr.client)));
+          const op=isOpen(c.id);
+          const FOLDER_COLORS2=["#eaf4f0","#faf0e8","#eaeff8","#f0eafa","#fdf6e3","#eef0f4"];
+          const rowBg=FOLDER_COLORS2[idx%FOLDER_COLORS2.length];
+          return(
+            <div key={c.id} className="folder" style={{background:rowBg}}>
+              <div className="folder-hd" style={{background:rowBg}} onClick={()=>toggle(c.id)}>
+                <div className="folder-icon" style={{background:(c.color||"#5a6476")+"18"}}>{c.emoji||"🔐"}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:13.5,color:"#0f0e0d"}}>{c.name}</div>
+                  <div style={{fontSize:11,color:"#9a9693",marginTop:1}}>{creds.length} credential{creds.length!==1?"s":""}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <button className="btn btn-dk btn-sm" style={{fontSize:11,padding:"3px 9px"}} onClick={e=>{e.stopPropagation();setModal({id:"addCred",preClient:c.id});}}>+ Add</button>
+                  <span style={{color:"#9a9693",fontSize:14,display:"inline-block",transform:op?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s"}}>&#8250;</span>
+                </div>
+              </div>
+              {op&&(
+                <div className="folder-body" style={{background:rowBg}}>
+                  {creds.length===0
+                    ?<div style={{padding:"12px 16px",fontSize:12.5,color:"#b0aba7",fontStyle:"italic"}}>No credentials yet - click + Add to save one.</div>
+                    :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12,padding:14}}>
+                      {creds.map(cr=><CredCard key={cr.id} cr={cr} shown={shown} setShown={setShown} copy={copy} setD={setD}/>)}
+                    </div>
+                  }
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </>
+  );
+}
+
+function CredCard({cr,shown,setShown,copy,setD}){
+  return(
+    <div className="kc">
+      <div>
+        <div style={{fontWeight:700,fontSize:13.5,color:"#0f0e0d"}}>{cr.title}</div>
+        {cr.url&&<a href={cr.url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#2d5fa8",wordBreak:"break-all"}}>{cr.url.replace(/^https?:\/\//,"").slice(0,40)}</a>}
+      </div>
+      <div className="kr"><div className="kl">User</div><div className="kv">{cr.username||"--"}</div><button className="kb" title="Copy" onClick={()=>copy(cr.username,"Username")}>&#9014;</button></div>
+      <div className="kr">
+        <div className="kl">Password</div>
+        <div className="kv">{shown[cr.id]?cr.password:"**********"}</div>
+        <button className="kb" title="Show/hide" onClick={()=>setShown(s=>({...s,[cr.id]:!s[cr.id]}))}>👁</button>
+        <button className="kb" title="Copy" onClick={()=>copy(cr.password,"Password")}>&#9014;</button>
+      </div>
+      {cr.notes&&<div style={{fontSize:11.5,color:"#9a9693",fontStyle:"italic",lineHeight:1.5}}>{cr.notes}</div>}
+      <div style={{display:"flex",justifyContent:"flex-end",borderTop:"1px solid #f0ede9",paddingTop:8,marginTop:2}}>
+        <button className="btn btn-rd btn-sm" onClick={()=>{if(window.confirm("Delete this credential?"))setD(d=>({...d,creds:d.creds.filter(c=>c.id!==cr.id)}));}}>Remove</button>
+      </div>
+    </div>
+  );
+}
+
+function Modal({modal,setModal,D,setD,cal,toast_}){
+  const close=()=>setModal(null);
+  const co=[{id:"all",name:"General"},...D.clients.map(c=>({id:c.id,name:c.name}))];
+  const [f,setF]=useState({});
+  const [showPw,setShowPw]=useState(false);
+  useEffect(()=>{
+    if(modal.date)setF({date:modal.date});
+    else if(modal.preClient)setF({client:modal.preClient});
+    else setF({});
+    setShowPw(false);
+  },[modal.id,modal.preClient,modal.date]);
+  const set=(k,v)=>setF(x=>({...x,[k]:v}));
+  const save=()=>{
+    if(modal.id==="addEvent"){
+      if(!f.title||!f.date){toast_("Title and date required");return;}
+      setD(d=>({...d,events:[...d.events,{id:"ev"+Date.now(),title:f.title,date:f.date,time:f.time||"",note:f.note||""}]}));
+      toast_("Event saved");
+    }else if(modal.id==="addDoc"){
+      if(!f.title)return;
+      setD(d=>({...d,docs:[...d.docs,{id:"d"+Date.now(),title:f.title,client:f.client||"all",icon:f.icon||"📄",desc:f.desc||"",url:f.url||"",date:new Date().toISOString().slice(0,10)}]}));
+      toast_("Document saved");
+    }else if(modal.id==="addLink"){
+      if(!f.title||!f.url){toast_("Title and URL required");return;}
+      setD(d=>({...d,links:[...d.links,{id:"l"+Date.now(),title:f.title,url:f.url,client:f.client||modal.preClient||"all",emoji:f.emoji||"🔗"}]}));
+      toast_("Link saved");
+    }else if(modal.id==="addClient"){
+      if(!f.name)return;
+      setD(d=>({...d,clients:[...d.clients,{id:"c"+Date.now(),name:f.name,niche:f.niche||"--",role:f.role||"--",emoji:f.emoji||"🏢",color:f.color||"#c9a84c",tasks:[]}]}));
+      toast_("Client added - appears in all tabs automatically");
+    }else if(modal.id==="addCred"){
+      if(!f.title){toast_("Label required");return;}
+      setD(d=>({...d,creds:[...d.creds,{id:"cr"+Date.now(),title:f.title,client:f.client||modal.preClient||"all",username:f.username||"",password:f.password||"",url:f.url||"",notes:f.notes||""}]}));
+      toast_("Credential saved");
+    }
+    close();
+  };
+  const TT={addEvent:"Add Event",addDoc:"Add Document",addLink:"Add Link",addClient:"Add Client",addCred:"Add Credential"};
+  return(
+    <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&close()}>
+      <div className="modal">
+        <div className="modal-hd"><div style={{fontSize:17,fontWeight:700}}>{TT[modal.id]||""}</div><button onClick={close} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#9a9693",padding:"2px 6px",borderRadius:4}}>✕</button></div>
+        <div className="modal-bd">
+          {modal.id==="addEvent"&&<>
+            <div className="fg"><label className="fl">Title</label><input className="inp" style={{width:"100%"}} placeholder="Meeting with client..." value={f.title||""} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Date</label><input type="date" className="inp" style={{width:"100%"}} value={f.date||""} onChange={e=>set("date",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Time</label><input type="time" className="inp" style={{width:"100%"}} value={f.time||""} onChange={e=>set("time",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Note</label><input className="inp" style={{width:"100%"}} placeholder="Optional" value={f.note||""} onChange={e=>set("note",e.target.value)}/></div>
+          </>}
+          {modal.id==="addDoc"&&<>
+            <div className="fg"><label className="fl">Title</label><input className="inp" style={{width:"100%"}} placeholder="Onboarding SOP..." value={f.title||""} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Client</label><select className="fsel" style={{width:"100%"}} value={f.client||"all"} onChange={e=>set("client",e.target.value)}>{co.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Type</label><select className="fsel" style={{width:"100%"}} value={f.icon||"📄"} onChange={e=>set("icon",e.target.value)}><option value="📄">Document</option><option value="📊">Spreadsheet</option><option value="📋">SOP</option><option value="📁">Folder</option><option value="📝">Notes</option></select></div>
+            <div className="fg"><label className="fl">Description</label><textarea className="fta" style={{width:"100%"}} placeholder="What is this?" value={f.desc||""} onChange={e=>set("desc",e.target.value)}/></div>
+            <div className="fg"><label className="fl">URL</label><input className="inp" style={{width:"100%"}} placeholder="https://..." value={f.url||""} onChange={e=>set("url",e.target.value)}/></div>
+          </>}
+          {modal.id==="addLink"&&<>
+            <div className="fg"><label className="fl">Label</label><input className="inp" style={{width:"100%"}} placeholder="Dashboard..." value={f.title||""} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="fg"><label className="fl">URL</label><input className="inp" style={{width:"100%"}} placeholder="https://..." value={f.url||""} onChange={e=>set("url",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Client</label><select className="fsel" style={{width:"100%"}} value={f.client||modal.preClient||"all"} onChange={e=>set("client",e.target.value)}>{co.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Emoji</label><input className="inp" style={{width:"100%"}} placeholder="🔗" maxLength={2} value={f.emoji||""} onChange={e=>set("emoji",e.target.value)}/></div>
+          </>}
+          {modal.id==="addClient"&&<>
+            <div className="fg"><label className="fl">Client Name</label><input className="inp" style={{width:"100%"}} placeholder="Brand name..." value={f.name||""} onChange={e=>set("name",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Niche</label><input className="inp" style={{width:"100%"}} placeholder="Fashion Ecommerce..." value={f.niche||""} onChange={e=>set("niche",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Your Role</label><input className="inp" style={{width:"100%"}} placeholder="CS Manager..." value={f.role||""} onChange={e=>set("role",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Emoji</label><input className="inp" style={{width:"100%"}} placeholder="🏢" maxLength={2} value={f.emoji||""} onChange={e=>set("emoji",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Color</label><input type="color" className="inp" style={{width:"100%",height:40,padding:"4px 8px"}} value={f.color||"#c9a84c"} onChange={e=>set("color",e.target.value)}/></div>
+            <div style={{fontSize:12,color:"#9a9693",background:"#f0ede9",padding:"8px 12px",borderRadius:8}}>New client will appear automatically in Clients, Links, Credentials, and Document Vault.</div>
+          </>}
+          {modal.id==="addCred"&&<>
+            <div className="fg"><label className="fl">Label / Platform</label><input className="inp" style={{width:"100%"}} placeholder="Gorgias, Shopify, Gmail..." value={f.title||""} onChange={e=>set("title",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Client</label><select className="fsel" style={{width:"100%"}} value={f.client||modal.preClient||"all"} onChange={e=>set("client",e.target.value)}>{co.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div className="fg"><label className="fl">Username / Email</label><input className="inp" style={{width:"100%"}} placeholder="user@example.com" value={f.username||""} onChange={e=>set("username",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Password</label>
+              <div style={{display:"flex",gap:7}}>
+                <input type={showPw?"text":"password"} className="inp" style={{flex:1}} placeholder="Password" value={f.password||""} onChange={e=>set("password",e.target.value)}/>
+                <button type="button" className="btn btn-ot btn-sm" onClick={()=>setShowPw(p=>!p)}>{showPw?"Hide":"Show"}</button>
+              </div>
+            </div>
+            <div className="fg"><label className="fl">URL (optional)</label><input className="inp" style={{width:"100%"}} placeholder="https://app.gorgias.com" value={f.url||""} onChange={e=>set("url",e.target.value)}/></div>
+            <div className="fg"><label className="fl">Notes (optional)</label><textarea className="fta" style={{width:"100%",minHeight:60}} placeholder="2FA on phone, admin access..." value={f.notes||""} onChange={e=>set("notes",e.target.value)}/></div>
+          </>}
+        </div>
+        <div className="modal-ft">
+          <button className="btn btn-ot" onClick={close}>Cancel</button>
+          <button className="btn btn-dk" onClick={save}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Empty({icon,text}){
+  return(
+    <div style={{textAlign:"center",padding:"36px 16px",color:"#9a9693"}}>
+      <div style={{fontSize:32,marginBottom:8}}>{icon}</div>
+      <div style={{fontSize:13}}>{text}</div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
